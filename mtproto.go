@@ -9,11 +9,13 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/jasonlvhit/gocron"
 )
 
 const (
-	appId   = 41994
-	appHash = "269069e15c81241f5670c397941016a2"
+	appId   = 69313
+	appHash = "a33d3868accc10fbecfeccadd8e5aa12"
 )
 
 type MTProto struct {
@@ -246,35 +248,142 @@ func (m *MTProto) Auth(phonenumber string) error {
 	return nil
 }
 
-func (m *MTProto) GetContacts() error {
+func (m *MTProto) GetDialogs() error {
 	resp := make(chan TL, 1)
-	m.queueSend <- packetToSend{TL_contacts_getContacts{""}, resp}
+	m.queueSend <- packetToSend{TL_messages_getDialogs{}, resp}
 	x := <-resp
-	list, ok := x.(TL_contacts_contacts)
+
+	list, ok := x.(TL_messages_dialogsSlice)
+	if !ok {
+		return fmt.Errorf("RPC: %#v", ok)
+	}
+
+	//fmt.Printf("%#v",list.chats)
+
+	for _, chat := range list.dialogs {
+		fmt.Printf("%#v\n", chat)
+		// chat := chat.(TL_dialog)
+		// peer := chat.peer.(TL_peerUser)
+		// fmt.Printf("%#v\n", peer.user_id)
+	}
+
+	return nil
+}
+
+func (m *MTProto) resolveUserName(uname string) (error, int32, int64) {
+	resp := make(chan TL, 1)
+	m.queueSend <- packetToSend{TL_contacts_resolveUsername{uname}, resp}
+	x := <-resp
+	list, ok := x.(TL_userForeign)
+	if !ok {
+		return fmt.Errorf("RPC: %#v", x), 0, 0
+	}
+
+	return nil, list.id, list.access_hash
+}
+
+func (m *MTProto) SendMessageToBot(uname string, msg string) error {
+	err, uid, hash := m.resolveUserName(uname)
+	if err != nil {
+		return fmt.Errorf("resolveUserName err: %#v", err)
+	}
+
+	resp := make(chan TL, 1)
+	m.queueSend <- packetToSend{
+		TL_messages_sendMessage{
+			TL_inputPeerForeign{uid, hash},
+			msg,
+			rand.Int63(),
+		},
+		resp,
+	}
+	x := <-resp
+	_, ok := x.(TL_messages_sentMessage)
 	if !ok {
 		return fmt.Errorf("RPC: %#v", x)
 	}
 
-	contacts := make(map[int32]TL_userContact)
-	for _, v := range list.users {
-		if v, ok := v.(TL_userContact); ok {
-			contacts[v.id] = v
-		}
+	return nil
+}
+
+func (m *MTProto) Forest() error {
+	err := m.SendMessageToBot("chatwarsbot", "🌲Лес")
+	if err != nil {
+		return fmt.Errorf("Forest err: %#v", err)
 	}
-	fmt.Printf(
-		"\033[33m\033[1m%10s    %10s    %-30s    %-20s\033[0m\n",
-		"id", "mutual", "name", "username",
-	)
-	for _, v := range list.contacts {
-		v := v.(TL_contact)
-		fmt.Printf(
-			"%10d    %10t    %-30s    %-20s\n",
-			v.user_id,
-			toBool(v.mutual),
-			fmt.Sprintf("%s %s", contacts[v.user_id].first_name, contacts[v.user_id].last_name),
-			contacts[v.user_id].username,
-		)
+
+	return nil
+}
+
+func (m *MTProto) CronForest() error {
+	var err error
+	fmt.Println("Run cron")
+	gocron.Every(1).Hour().Do(func() {
+		fmt.Println("Run job")
+		err = m.Forest()
+	})
+	<-gocron.Start()
+
+	if err != nil {
+		return fmt.Errorf("cron err: %#v", err)
 	}
+
+	return nil
+}
+
+func (m *MTProto) GetContacts() error {
+	resp := make(chan TL, 1)
+	m.queueSend <- packetToSend{TL_messages_getFullChat{52504489}, resp}
+	x := <-resp
+	list, ok := x.(TL_messages_chatFull)
+	if !ok {
+		return fmt.Errorf("RPC: %#v", x)
+	}
+
+	for _, c := range list.chats {
+		fmt.Println(c.(TL_chatFull))
+	}
+	// list = list.blocked.(TL_contactBlocked)
+	// fmt.Println(list)
+	// if !ok {
+	// var b bytes.Buffer // A Buffer needs no initialization.
+	// b.Write(list.blocked)
+	// fmt.Fprintf(&b, "world!")
+	// b.WriteTo(os.Stdout)
+	// for _, c := range list.blocked {
+	// 	var b bytes.Buffer // A Buffer needs no initialization.
+	// 	b.Write(c.encode())
+	// 	fmt.Fprintf(&b, "world!")
+	// 	// b.WriteTo(os.Stdout)
+	// 	// fmt.Fprintf(&c.encode(), "")
+	// }
+	// 	return fmt.Errorf("RPC: %#v", x)
+	// }
+
+	// contacts := make(map[int32]TL_userContact)
+	// for _, v := range list {
+	// fmt.Println(list)
+	// }
+
+	// for _, v := range list.users {
+	// 	if v, ok := v.(TL_userContact); ok {
+	// 		contacts[v.id] = v
+	// 	}
+	// }
+	// fmt.Printf(
+	// 	"\033[33m\033[1m%10s    %10s    %-30s    %-20s\033[0m\n",
+	// 	"id", "mutual", "name", "username",
+	// )
+	// for _, v := range list.contacts {
+	// 	v := v.(TL_contact)
+	// 	fmt.Printf(
+	// 		"%10d    %10t    %-30s    %-20s\n",
+	// 		v.user_id,
+	// 		toBool(v.mutual),
+	// 		fmt.Sprintf("%s %s", contacts[v.user_id].first_name, contacts[v.user_id].last_name),
+	// 		contacts[v.user_id].username,
+	// 	)
+	// }
 
 	return nil
 }

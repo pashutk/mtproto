@@ -26,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	commands := map[string]int{"auth": 1, "msg": 2, "list": 0}
+	commands := map[string]int{"auth": 1, "msg": 2, "list": 0, "dialogs": 0, "msgToBot": 2, "cronForest": 0}
 	valid := false
 	for k, v := range commands {
 		if os.Args[1] == k {
@@ -61,10 +61,20 @@ func main() {
 		err = m.Auth(os.Args[2])
 	case "msg":
 		user_id, _ := strconv.Atoi(os.Args[2])
+		fmt.Println(user_id)
 		err = m.SendMessage(int32(user_id), os.Args[3])
 
 	case "list":
 		err = m.GetContacts()
+
+	case "dialogs":
+		err = m.GetDialogs()
+
+	case "msgToBot":
+		err = m.SendMessageToBot(os.Args[2], os.Args[3])
+
+	case "cronForest":
+		err = m.CronForest()
 	}
 
 	if err != nil {
