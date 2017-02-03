@@ -282,6 +282,34 @@ func (m *MTProto) resolveUserName(uname string) (error, int32, int64) {
 	return nil, list.id, list.access_hash
 }
 
+func (m *MTProto) GetLastMessageFromBot(uname string) (error, string) {
+	err, uid, hash := m.resolveUserName(uname)
+	if err != nil {
+		return fmt.Errorf("GetLastMessageFromBot resolvename err: %#v", err), ""
+	}
+
+	peer := TL_inputPeerForeign{
+		user_id:     uid,
+		access_hash: hash,
+	}
+
+	resp := make(chan TL, 1)
+	m.queueSend <- packetToSend{
+		TL_messages_getHistory{peer, 0, 0, 1},
+		resp,
+	}
+	x := <-resp
+	data, ok := x.(TL_messages_messagesSlice)
+	if !ok {
+		return fmt.Errorf("GetLastMessageFromBot messages err: %#v", x), ""
+	}
+
+	msg := data.messages[0]
+	msgText := msg.(TL_message)
+
+	return nil, msgText.message
+}
+
 func (m *MTProto) SendMessageToBot(uname string, msg string) error {
 	err, uid, hash := m.resolveUserName(uname)
 	if err != nil {
