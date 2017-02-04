@@ -67,6 +67,7 @@ func NewMTProto(authkeyfile string) (*MTProto, error) {
 	}
 	rand.Seed(time.Now().UnixNano())
 	m.sessionId = rand.Int63()
+	m.inputPeerForeignMap = make(map[string]TL_inputPeerForeign)
 
 	return m, nil
 }
