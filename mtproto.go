@@ -270,6 +270,24 @@ func (m *MTProto) GetDialogs() error {
 	return nil
 }
 
+var botInputPeerForeignMap map[string]TL_inputPeerForeign
+
+func (m *MTProto) getInputPeerForeign(uname string) (error, TL_inputPeerForeign) {
+	inputPeerForeign, ok := botInputPeerForeignMap[uname]
+	if ok {
+		return nil, botInputPeerForeignMap[uname]
+	}
+
+	err, uid, hash := m.resolveUserName(uname)
+	if err != nil {
+		return fmt.Errorf("getInputPeerForeign err: %#v", err), TL_inputPeerForeign{}
+	}
+
+	inputPeerForeign = TL_inputPeerForeign{uid, hash}
+	botInputPeerForeignMap[uname] = inputPeerForeign
+	return nil, botInputPeerForeignMap[uname]
+}
+
 func (m *MTProto) resolveUserName(uname string) (error, int32, int64) {
 	resp := make(chan TL, 1)
 	m.queueSend <- packetToSend{TL_contacts_resolveUsername{uname}, resp}
@@ -283,19 +301,14 @@ func (m *MTProto) resolveUserName(uname string) (error, int32, int64) {
 }
 
 func (m *MTProto) GetLastMessageFromBot(uname string) (error, string) {
-	err, uid, hash := m.resolveUserName(uname)
+	err, inputPeerForeign := m.getInputPeerForeign(uname)
 	if err != nil {
 		return fmt.Errorf("GetLastMessageFromBot resolvename err: %#v", err), ""
 	}
 
-	peer := TL_inputPeerForeign{
-		user_id:     uid,
-		access_hash: hash,
-	}
-
 	resp := make(chan TL, 1)
 	m.queueSend <- packetToSend{
-		TL_messages_getHistory{peer, 0, 0, 1},
+		TL_messages_getHistory{inputPeerForeign, 0, 0, 1},
 		resp,
 	}
 	x := <-resp
@@ -311,18 +324,14 @@ func (m *MTProto) GetLastMessageFromBot(uname string) (error, string) {
 }
 
 func (m *MTProto) SendMessageToBot(uname string, msg string) error {
-	err, uid, hash := m.resolveUserName(uname)
+	err, inputPeerForeign := m.getInputPeerForeign(uname)
 	if err != nil {
 		return fmt.Errorf("resolveUserName err: %#v", err)
 	}
 
 	resp := make(chan TL, 1)
 	m.queueSend <- packetToSend{
-		TL_messages_sendMessage{
-			TL_inputPeerForeign{uid, hash},
-			msg,
-			rand.Int63(),
-		},
+		TL_messages_sendMessage{inputPeerForeign, msg, rand.Int63()},
 		resp,
 	}
 	x := <-resp
