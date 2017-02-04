@@ -9,8 +9,6 @@ import (
 	"runtime"
 	"sync"
 	"time"
-
-	"github.com/jasonlvhit/gocron"
 )
 
 const (
@@ -42,6 +40,8 @@ type MTProto struct {
 	msgId        int64
 
 	dclist map[int32]string
+
+	inputPeerForeignMap map[string]TL_inputPeerForeign
 }
 
 type packetToSend struct {
@@ -270,12 +270,10 @@ func (m *MTProto) GetDialogs() error {
 	return nil
 }
 
-var botInputPeerForeignMap map[string]TL_inputPeerForeign
-
 func (m *MTProto) getInputPeerForeign(uname string) (error, TL_inputPeerForeign) {
-	inputPeerForeign, ok := botInputPeerForeignMap[uname]
+	inputPeerForeign, ok := m.inputPeerForeignMap[uname]
 	if ok {
-		return nil, botInputPeerForeignMap[uname]
+		return nil, m.inputPeerForeignMap[uname]
 	}
 
 	err, uid, hash := m.resolveUserName(uname)
@@ -284,8 +282,8 @@ func (m *MTProto) getInputPeerForeign(uname string) (error, TL_inputPeerForeign)
 	}
 
 	inputPeerForeign = TL_inputPeerForeign{uid, hash}
-	botInputPeerForeignMap[uname] = inputPeerForeign
-	return nil, botInputPeerForeignMap[uname]
+	m.inputPeerForeignMap[uname] = inputPeerForeign
+	return nil, m.inputPeerForeignMap[uname]
 }
 
 func (m *MTProto) resolveUserName(uname string) (error, int32, int64) {
@@ -347,22 +345,6 @@ func (m *MTProto) Forest() error {
 	err := m.SendMessageToBot("chatwarsbot", "🌲Лес")
 	if err != nil {
 		return fmt.Errorf("Forest err: %#v", err)
-	}
-
-	return nil
-}
-
-func (m *MTProto) CronForest() error {
-	var err error
-	fmt.Println("Run cron")
-	gocron.Every(1).Hour().Do(func() {
-		fmt.Println("Run job")
-		err = m.Forest()
-	})
-	<-gocron.Start()
-
-	if err != nil {
-		return fmt.Errorf("cron err: %#v", err)
 	}
 
 	return nil
